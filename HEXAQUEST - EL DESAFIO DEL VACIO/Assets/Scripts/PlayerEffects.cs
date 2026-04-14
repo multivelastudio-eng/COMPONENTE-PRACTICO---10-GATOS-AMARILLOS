@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// Handles cinematic visual effects for the player, like fading out upon death.
-/// Includes Physics Killswitches to prevent collision bugs.
+/// Manages kinematic state transitions to prevent physics warnings.
 /// </summary>
 public class PlayerEffects : MonoBehaviour
 {
@@ -33,16 +33,12 @@ public class PlayerEffects : MonoBehaviour
 
     public void StartFadeOutAndFall()
     {
-        // Turn off Controls immediately
         if (pController != null) pController.enabled = false; 
         
         if (rb != null) 
         {
-            // BUG FIX: ORDER OF OPERATIONS FOR UNITY 6
-            // 1. First, stop all physical momentum while it's still a dynamic body
+            // First stop, then make kinematic
             rb.linearVelocity = Vector3.zero; 
-            
-            // 2. THEN, make it kinematic (ghost) so it ignores world collisions
             rb.isKinematic = true; 
             rb.useGravity = false;
         }
@@ -52,8 +48,25 @@ public class PlayerEffects : MonoBehaviour
         StartCoroutine(FadeOutAndFallRoutine());
     }
 
+    /// <summary>
+    /// Restores the player to its physical state. 
+    /// Must be called BEFORE attempting to set physics velocity.
+    /// </summary>
     public void ResetVisuals()
     {
+        StopAllCoroutines(); 
+        
+        // 1. Restore Physics State FIRST to avoid Unity warnings
+        if (rb != null) 
+        {
+            rb.isKinematic = false;
+            rb.useGravity = true;
+        }
+        
+        if (col != null) col.enabled = true;
+        if (pController != null) pController.enabled = true;
+
+        // 2. Restore Visuals
         for (int i = 0; i < characterRenderers.Length; i++)
         {
             if(characterRenderers[i].material.HasProperty("_Color") && i < originalColors.Count)
@@ -61,15 +74,6 @@ public class PlayerEffects : MonoBehaviour
                 characterRenderers[i].material.color = originalColors[i];
             }
         }
-        
-        // Restore Physics and Controls upon respawn
-        if (rb != null) 
-        {
-            rb.isKinematic = false;
-            rb.useGravity = true;
-        }
-        if (col != null) col.enabled = true;
-        if (pController != null) pController.enabled = true;
     }
 
     private IEnumerator FadeOutAndFallRoutine()
