@@ -1,22 +1,24 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.Events; // Required for professional Event hooks
+using UnityEngine.Events; 
 
-[RequireComponent(typeof(Rigidbody))]
+/// <summary>
+/// Handles player movement, jumping, and ground pounding mechanics.
+/// Includes advanced physics checks to prevent double-jumping, mid-air glitches,
+/// and micro-landing audio bugs on collider seams.
+/// </summary>[RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour
 {
-    // --- 1. MOVEMENT SETTINGS ---[Header("Movement & Camera")]
-    [Tooltip("Normal movement speed.")]
-    public float moveSpeed = 8f;
-    [Tooltip("Multiplier applied when Left Shift is held.")]
-    public float sprintMultiplier = 1.5f;
-    [Tooltip("How fast the character rotates to face the movement direction.")]
+    // --- 1. MOVEMENT SETTINGS ---
+    [Header("Movement & Camera")][Tooltip("Normal movement speed.")]
+    public float moveSpeed = 8f;[Tooltip("Multiplier applied when Left Shift is held.")]
+    public float sprintMultiplier = 1.5f;[Tooltip("How fast the character rotates to face the movement direction.")]
     public float rotationSpeed = 15f;[Tooltip("Reference to the Main Camera to make movement relative to screen view.")]
     public Transform mainCamera;
 
-    // --- 2. JUMP & ACTION PHYSICS ---[Header("Jump & Action Physics")]
-    public float jumpForce = 8.5f;
-    public float groundPoundForce = 30f;
+    // --- 2. JUMP & ACTION PHYSICS ---[Header("Jump & Action Physics")][Tooltip("Exact vertical velocity applied when jumping.")]
+    public float jumpForce = 8.5f;[Tooltip("Downward force applied during a Ground Pound.")]
+    public float groundPoundForce = 30f;[Tooltip("Seconds the character hangs in the air before pounding down.")]
     public float hangTime = 0.2f;
     
     [Header("Game Feel (Mario-like Physics)")][Tooltip("Gravity multiplier when falling to make it feel heavy/fast.")]
@@ -28,7 +30,7 @@ public class PlayerController : MonoBehaviour
     // --- 3. GROUND DETECTION ---
     [Header("Ground Detection")]
     public Transform groundCheck;
-    public float groundDistance = 0.5f; // Kept at 0.5 for better detection
+    public float groundDistance = 0.5f; 
     public LayerMask groundMask;
 
     // --- 4. AUDIO & VFX EVENTS ---
@@ -41,62 +43,93 @@ public class PlayerController : MonoBehaviour
     private Rigidbody rb;
     private Vector3 movementInput;
     private bool isGrounded;
-    private bool wasGrounded; // To detect the exact moment of landing
+    private bool wasGrounded; 
     private bool isGroundPounding = false;
 
     // --- ANIMATION ---
     [Header("Animation")]
-    public Animator characterAnimator; // Reference to the character's Animator component.
+    public Animator characterAnimator; 
 
-    // --- TIMERS FOR GAME FEEL ---
+    // --- TIMERS FOR GAME FEEL & BUG FIXES ---
     private float coyoteTimeCounter;
     private float jumpBufferCounter;
+    private float jumpCooldownTimer; 
+    
+    // NEW FIX: Tracks how long the player has actually been off the ground
+    private float airTimer = 0f; 
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-        rb.constraints = RigidbodyConstraints.FreezeRotation; // Lock all rotations automatically
-
-        // Auto-assign camera if developer forgot
+        rb.constraints = RigidbodyConstraints.FreezeRotation; 
+        
         if (mainCamera == null) mainCamera = Camera.main.transform;
     }
 
     void Update()
     {
-        // 1. Check Ground State & Fire Landing Event
-        isGrounded = Physics.CheckSphere(groundCheck.position, groundDistance, groundMask);
-        
+        if (jumpCooldownTimer > 0) jumpCooldownTimer -= Time.deltaTime;
+
+        // 1. Strict Ground Detection
+        if (rb.linearVelocity.y <= 0.1f)
+        {
+            isGrounded = Physics.CheckSphere(groundCheck.position, groundDistance, groundMask);
+        }
+        else
+        {
+            isGrounded = false; 
+        }
+
+        // 2. Air Timer Logic (BUG FIX: Seam Glitches)
+        if (!isGrounded)
+        {
+            airTimer += Time.deltaTime;
+        }
+
+        // 3. Fire Landing Event
+        // Only fire if we actually spent a meaningful amount of time in the air (>0.15s).
+        // This entirely ignores the tiny 1-frame bumps when walking over hexagon seams.
         if (isGrounded && !wasGrounded && !isGroundPounding)
         {
-            onLand?.Invoke(); // Fire Landing Sound/VFX
+            if (airTimer > 0.15f)
+            {
+                onLand?.Invoke(); 
+            }
         }
+        
+        // Reset air timer when firmly on the ground
+        if (isGrounded)
+        {
+            airTimer = 0f;
+        }
+
         wasGrounded = isGrounded;
 
-        // 2. Handle Coyote Time
+        // 4. Handle Coyote Time 
         coyoteTimeCounter = isGrounded ? coyoteTime : coyoteTimeCounter - Time.deltaTime;
 
-        // 3. Handle Jump Buffering
+        // 5. Handle Jump Buffering 
         jumpBufferCounter = Input.GetButtonDown("Jump") ? jumpBufferTime : jumpBufferCounter - Time.deltaTime;
 
-        // 4. Read Input and make it Relative to Camera
+        // 6. Read Movement Input
         if (!isGroundPounding)
         {
             CalculateCameraRelativeMovement();
         }
 
-        // 5. Execute Jump (Checks both Buffering and Coyote Time)
-        if (jumpBufferCounter > 0f && coyoteTimeCounter > 0f && !isGroundPounding)
+        // 7. Execute Jump
+        if (jumpBufferCounter > 0f && coyoteTimeCounter > 0f && !isGroundPounding && jumpCooldownTimer <= 0f)
         {
             PerformJump();
         }
 
-        // 6. Execute Ground Pound (Key 'C' or Ctrl)
+        // 8. Execute Ground Pound 
         if ((Input.GetKeyDown(KeyCode.C) || Input.GetKeyDown(KeyCode.LeftControl)) && !isGrounded && !isGroundPounding)
         {
             StartCoroutine(GroundPoundRoutine());
         }
         
-        // 7. Send state to Animator
+        // 9. Send physical state to the Animator
         UpdateAnimator();
     }
 
@@ -119,17 +152,14 @@ public class PlayerController : MonoBehaviour
         float horizontal = Input.GetAxisRaw("Horizontal");
         float vertical = Input.GetAxisRaw("Vertical");
 
-        // Calculate directions based on camera's current rotation
         Vector3 camForward = mainCamera.forward;
         Vector3 camRight = mainCamera.right;
 
-        // Flatten the vectors on the Y axis (we don't want to move into the ground)
         camForward.y = 0f;
         camRight.y = 0f;
         camForward.Normalize();
         camRight.Normalize();
 
-        // Final input direction
         movementInput = (camForward * vertical + camRight * horizontal).normalized;
     }
 
@@ -137,7 +167,8 @@ public class PlayerController : MonoBehaviour
     {
         float currentSpeed = Input.GetKey(KeyCode.LeftShift) ? moveSpeed * sprintMultiplier : moveSpeed;
         Vector3 targetVelocity = movementInput * currentSpeed;
-        targetVelocity.y = rb.linearVelocity.y; // Preserve vertical velocity (gravity)
+        
+        targetVelocity.y = rb.linearVelocity.y; 
         
         rb.linearVelocity = targetVelocity;
     }
@@ -153,25 +184,23 @@ public class PlayerController : MonoBehaviour
 
     private void PerformJump()
     {
-        // Reset counters to prevent double actions
         jumpBufferCounter = 0f;
         coyoteTimeCounter = 0f;
+        jumpCooldownTimer = 0.2f;
+        
+        // Force the air timer so the landing sound is guaranteed to play when landing from a real jump
+        airTimer = 0.2f; 
 
-        // Reset Y velocity for consistent jump heights
-        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-        rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-
-        onJump?.Invoke(); // Fire Jump Sound/VFX
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, jumpForce, rb.linearVelocity.z);
+        onJump?.Invoke(); 
     }
 
     private void ApplyAdvancedGravity()
     {
-        // Faster falling (Mario feel)
         if (rb.linearVelocity.y < 0)
         {
             rb.linearVelocity += Vector3.up * Physics.gravity.y * (fallMultiplier - 1) * Time.fixedDeltaTime;
         }
-        // Variable jump height (Low jump if button is released early)
         else if (rb.linearVelocity.y > 0 && !Input.GetButton("Jump"))
         {
             rb.linearVelocity += Vector3.up * Physics.gravity.y * (lowJumpMultiplier - 1) * Time.fixedDeltaTime;
@@ -182,10 +211,7 @@ public class PlayerController : MonoBehaviour
     {
         if (characterAnimator != null)
         {
-            // Send movement speed to the Animator to trigger the run/walk animation.
             characterAnimator.SetFloat("Speed", movementInput.magnitude);
-            
-            // THE MAGIC LINE! This sends the 'isGrounded' state to the Animator.
             characterAnimator.SetBool("isGrounded", isGrounded);
         }
     }
@@ -194,25 +220,20 @@ public class PlayerController : MonoBehaviour
     {
         isGroundPounding = true;
 
-        // 1. Suspend in air
         rb.linearVelocity = Vector3.zero; 
         rb.useGravity = false;      
 
         yield return new WaitForSeconds(hangTime); 
 
-        // 2. Smash down
         rb.useGravity = true;
-        rb.AddForce(Vector3.down * groundPoundForce, ForceMode.Impulse);
+        rb.linearVelocity = new Vector3(0f, -groundPoundForce, 0f);
 
-        // 3. Wait for impact
         yield return new WaitUntil(() => isGrounded);
 
-        onGroundPoundImpact?.Invoke(); // Fire Impact Sound/Camera Shake/VFX
+        onGroundPoundImpact?.Invoke(); 
         
-        // Translated to English to comply with grading rubric
         Debug.Log("Ground impact detected!");
 
-        // 4. Brief stun/recovery duration after impact
         yield return new WaitForSeconds(0.2f);
         isGroundPounding = false;
     }
@@ -226,21 +247,17 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    // ==========================================
-    // BUG FIX: RESET PLAYER STATE ON RESPAWN
-    // ==========================================
-    /// <summary>
-    /// Clears any stuck coroutines (like an infinite Ground Pound) and restores normal physics.
-    /// Called by the GameManager when the player respawns to prevent movement locks.
-    /// </summary>
     public void ResetState()
     {
         StopAllCoroutines(); 
         isGroundPounding = false; 
+        jumpCooldownTimer = 0f; 
+        airTimer = 0f; // Clean up timer on respawn
+        
         if (rb != null)
         {
             rb.useGravity = true;
-            rb.linearVelocity = Vector3.zero; // Prevent sliding after respawn
+            rb.linearVelocity = Vector3.zero; 
         }
     }
 }
