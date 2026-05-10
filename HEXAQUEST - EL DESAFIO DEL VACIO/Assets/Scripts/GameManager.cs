@@ -1,54 +1,40 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using TMPro; 
-using UnityEngine.UI; 
 using UnityEngine.Events;
+using UnityEngine.SceneManagement; // Essential for scene transitions
 
 /// <summary>
 /// Master Game Controller for "HEXAQUEST".
-/// Handles cinematic sequences, gameplay loops, stabilized respawn logic, and UI score updates.
+/// Manages the core game loop, round timing, player lifecycle, and high-level game states.
+/// Delegates UI rendering to UIManager to follow the Single Responsibility Principle.
 /// </summary>
 public class GameManager : MonoBehaviour
 {
     // --- 1. GAME SETTINGS ---
     [Header("Game Settings")]
+    [Tooltip("Time the player has to reach the safe color.")]
     public float timeToChoose = 3f;
+    [Tooltip("How long the incorrect platforms stay dropped.")]
     public float timeDropped = 2f;
+    [Tooltip("Total number of attempts before Game Over.")]
     public int maxLives = 3;
 
     // --- 2. WORLD REFERENCES ---
     [Header("World References")]
+    [Tooltip("List of all hexagonal platforms in the scene.")]
     public List<HexagonPlatform> allPlatforms;
+    [Tooltip("The position where the player reappears after falling.")]
     public Transform playerRespawnPoint;
+    [Tooltip("The player GameObject.")]
     public GameObject player;
-
-    // --- 3. INTRO SEQUENCE UI ---
-    [Header("Intro Sequence UI")]
-    public Animator introAnimator; 
-    public Sprite readySprite;
-    public Sprite reallySprite;
-    public Sprite startSprite;
-    private Image introImageDisplay; 
-
-    // --- 4. MAIN HUD REFERENCES ---
-    [Header("Main HUD References")]
-    public GameObject hudContainer; 
-    public TextMeshProUGUI instructionText; 
-    public TextMeshProUGUI scoreText; // Only the NUMBER goes here
-    public GameObject[] heartIcons; 
-    public GameObject gameOverPanel; 
-    public Image colorIndicator;
-
-    // --- 5. VISUAL POLISH & IMPACT ---
-    [Header("Visual Polish & Impact")]
-    public Image screenFlashImage;
-    public GameObject textShineOverlay;
+    [Tooltip("Reference to the Camera Shaker script for impact effects.")]
     public CameraShaker mainCameraScript; 
+    [Tooltip("Background music source.")]
     public AudioSource bgmSource;
 
-    // --- 6. AUDIO & VFX EVENTS ---
-    [Header("Events (Audio/VFX)")]
+    // --- 3. EVENTS ---
+    [Header("Events (Audio/VFX Hooks)")]
     public UnityEvent onIntroStart; 
     public UnityEvent onRoundStart;
     public UnityEvent onPlatformsDrop; 
@@ -61,14 +47,14 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
-        if (introAnimator != null) introImageDisplay = introAnimator.GetComponent<Image>();
         currentLives = maxLives;
         
-        if (gameOverPanel != null) gameOverPanel.SetActive(false);
-        if (screenFlashImage != null) screenFlashImage.gameObject.SetActive(false);
-        if (textShineOverlay != null) textShineOverlay.SetActive(false);
         if (bgmSource != null) bgmSource.Stop();
         
+        // Prepare the UI through the UIManager Singleton
+        if (UIManager.Instance != null) UIManager.Instance.SetupIntro();
+        
+        // Start the master gameplay sequence
         StartCoroutine(GameSequenceRoutine());
     }
 
@@ -77,58 +63,56 @@ public class GameManager : MonoBehaviour
         // ==========================================
         // STAGE 1: CINEMATIC INTRO
         // ==========================================
-        if (hudContainer != null) hudContainer.SetActive(false);
-        if (introAnimator != null) introAnimator.gameObject.SetActive(true);
-
         onIntroStart?.Invoke();
 
-        if (introImageDisplay != null) introImageDisplay.sprite = readySprite;
-        ExecuteTextImpact(false); 
-        yield return new WaitForSeconds(1.2f);
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ShowReady();
+            yield return new WaitForSeconds(1.2f);
 
-        if (introImageDisplay != null) introImageDisplay.sprite = reallySprite;
-        ExecuteTextImpact(false);
-        yield return new WaitForSeconds(1.2f);
+            UIManager.Instance.ShowReally();
+            yield return new WaitForSeconds(1.2f);
 
-        if (introImageDisplay != null) introImageDisplay.sprite = startSprite;
-        ExecuteTextImpact(true); 
+            UIManager.Instance.ShowStart();
+        }
 
+        // Visual and physical impact at 'START!'
+        if (mainCameraScript != null) mainCameraScript.TriggerShake(0.5f, 0.7f);
         if (bgmSource != null) bgmSource.Play();
         yield return new WaitForSeconds(1.0f);
 
-        if (introAnimator != null) introAnimator.gameObject.SetActive(false);
-        if (hudContainer != null) hudContainer.SetActive(true);
-        UpdateUI();
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.EndIntroAndShowHUD();
+        }
+        RefreshUI();
 
         // ==========================================
         // STAGE 2: MAIN GAME LOOP
         // ==========================================
         while (currentLives > 0)
         {
-            // --- CLEAN START ---
             playerFellThisRound = false; 
 
-            // EMERGENCY CHECK: If for some weird reason the player is disabled, bring them back.
+            // Safeguard: Ensure player is active before a new round starts
             if (!player.activeInHierarchy)
             {
                 RespawnPlayer();
                 yield return new WaitForSeconds(0.5f);
             }
 
-            // Pick a random safe color
-            int randomColorIndex = Random.Range(0, System.Enum.GetValues(typeof(PlatformColor)).Length);
-            PlatformColor safeColor = (PlatformColor)randomColorIndex;
+            // Pick a random safe color from the Enum
+            PlatformColor safeColor = (PlatformColor)Random.Range(0, System.Enum.GetValues(typeof(PlatformColor)).Length);
 
-            // UI Instruction
-            if (instructionText != null) instructionText.text = "GO TO THIS COLOR!";
-            if (colorIndicator != null) 
+            // Update UI Instructions
+            if (UIManager.Instance != null)
             {
-                colorIndicator.color = GetRealColor(safeColor); 
-                StartCoroutine(ColorIndicatorPopRoutine());
+                UIManager.Instance.SetInstruction("GO TO THIS COLOR!");
+                UIManager.Instance.SetColorIndicator(GetRealColor(safeColor));
             }
             onRoundStart?.Invoke();
 
-            // Wait Phase (Interruptible if player falls)
+            // Wait Phase (Smart Timer: stops if player falls early)
             float chooseTimer = timeToChoose;
             while (chooseTimer > 0 && !playerFellThisRound)
             {
@@ -136,11 +120,14 @@ public class GameManager : MonoBehaviour
                 yield return null;
             }
 
-            // Drop Phase (Only if player didn't fall during the choice time)
+            // Drop Phase (Only if player is still on the board)
             if (!playerFellThisRound)
             {
-                if (instructionText != null) instructionText.text = "WATCH OUT!";
-                if (colorIndicator != null) colorIndicator.color = Color.black; 
+                if (UIManager.Instance != null)
+                {
+                    UIManager.Instance.SetInstruction("WATCH OUT!");
+                    UIManager.Instance.SetColorIndicator(Color.black);
+                }
                 onPlatformsDrop?.Invoke();
                 
                 foreach (HexagonPlatform platform in allPlatforms)
@@ -148,6 +135,7 @@ public class GameManager : MonoBehaviour
                     if (platform.platformColor != safeColor) platform.Drop();
                 }
 
+                // Survival Timer
                 float dropTimer = timeDropped;
                 while (dropTimer > 0 && !playerFellThisRound)
                 {
@@ -156,86 +144,87 @@ public class GameManager : MonoBehaviour
                 }
             }
 
-            // Recovery Phase (All platforms back up)
+            // Reset Round: All platforms come back up
             foreach (HexagonPlatform platform in allPlatforms) platform.ResetPlatform();
 
-            // --- FINAL RESULTS EVALUATION ---
+            // ==========================================
+            // STAGE 3: RESULTS & LATE-DEATH BUG FIX
+            // ==========================================
             if (playerFellThisRound)
             {
-                currentLives--; 
-                UpdateUI();
-                
-                if (instructionText != null) instructionText.text = "LIFE LOST!";
-                
-                // Wait for the death fade animation to finish
-                yield return new WaitForSeconds(1.5f); 
-
-                if (currentLives > 0)
-                {
-                    RespawnPlayer();
-                    if (instructionText != null) instructionText.text = "GET READY...";
-                    yield return new WaitForSeconds(1.5f); // Preparation time
-                }
+                yield return StartCoroutine(HandleDeathSequence());
             }
             else
             {
                 currentScore++;
-                UpdateUI();
-                if (instructionText != null) instructionText.text = "ROUND PASSED!";
-                yield return new WaitForSeconds(1.0f);
+                RefreshUI();
+                if (UIManager.Instance != null) UIManager.Instance.SetInstruction("ROUND PASSED!");
+                
+                // Check for falls during the victory pause
+                float victoryTimer = 1.5f;
+                while (victoryTimer > 0 && !playerFellThisRound)
+                {
+                    victoryTimer -= Time.deltaTime;
+                    yield return null;
+                }
+
+                if (playerFellThisRound)
+                {
+                    yield return StartCoroutine(HandleDeathSequence());
+                }
             }
         }
 
         GameOver();
     }
 
-    // VISUAL HELPERS
-    private void ExecuteTextImpact(bool isMega)
+    private IEnumerator HandleDeathSequence()
     {
-        if (introAnimator != null) introAnimator.SetTrigger(isMega ? "DoMegaBoing" : "DoBoing");
-        if (textShineOverlay != null) StartCoroutine(TextShineRoutine());
-        if (isMega)
+        currentLives--; 
+        RefreshUI();
+        
+        if (UIManager.Instance != null) UIManager.Instance.SetInstruction("LIFE LOST!");
+        
+        // Wait for the cinematic death animation (fade/fall) to finish
+        yield return new WaitForSeconds(1.5f); 
+
+        if (currentLives > 0)
         {
-            if (screenFlashImage != null) StartCoroutine(FlashRoutine());
-            if (mainCameraScript != null) mainCameraScript.TriggerShake(0.5f, 0.7f);
+            RespawnPlayer();
+            if (UIManager.Instance != null) UIManager.Instance.SetInstruction("GET READY...");
+            yield return new WaitForSeconds(1.5f); // Stabilization delay
         }
     }
 
-    private IEnumerator ColorIndicatorPopRoutine()
+    private void RefreshUI()
     {
-        if (colorIndicator == null) yield break;
-        colorIndicator.transform.localScale = Vector3.one * 1.3f;
-        yield return new WaitForSeconds(0.15f);
-        colorIndicator.transform.localScale = Vector3.one;
-    }
-
-    private IEnumerator TextShineRoutine()
-    {
-        textShineOverlay.SetActive(true);
-        yield return new WaitForSeconds(0.15f);
-        textShineOverlay.SetActive(false);
-    }
-
-    private IEnumerator FlashRoutine()
-    {
-        screenFlashImage.gameObject.SetActive(true);
-        float elapsed = 0f;
-        float duration = 0.4f;
-        while (elapsed < duration)
+        if (UIManager.Instance != null)
         {
-            float alpha = Mathf.Lerp(0.8f, 0f, elapsed / duration);
-            screenFlashImage.color = new Color(1f, 1f, 1f, alpha);
-            elapsed += Time.deltaTime;
-            yield return null;
+            UIManager.Instance.UpdateScore(currentScore);
+            UIManager.Instance.UpdateLives(currentLives);
         }
-        screenFlashImage.gameObject.SetActive(false);
     }
 
-    private Color GetRealColor(PlatformColor pc) { switch (pc) { case PlatformColor.Red: return Color.red; case PlatformColor.Blue: return Color.blue; case PlatformColor.Cyan: return Color.cyan; case PlatformColor.Yellow: return Color.yellow; case PlatformColor.Orange: return new Color(1f, 0.5f, 0f); case PlatformColor.Pink: return new Color(1f, 0.4f, 0.7f); case PlatformColor.Green: return Color.green; default: return Color.white; } }
+    private Color GetRealColor(PlatformColor pc)
+    {
+        switch (pc)
+        {
+            case PlatformColor.Red: return Color.red;
+            case PlatformColor.Blue: return Color.blue;
+            case PlatformColor.Cyan: return Color.cyan;
+            case PlatformColor.Yellow: return Color.yellow;
+            case PlatformColor.Orange: return new Color(1f, 0.5f, 0f); 
+            case PlatformColor.Pink: return new Color(1f, 0.4f, 0.7f); 
+            case PlatformColor.Green: return Color.green;
+            default: return Color.white;
+        }
+    }
 
+    /// <summary>
+    /// Triggered by the VoidZone script. Initiates the death process.
+    /// </summary>
     public void PlayerFell()
     {
-        // VITAL FIX: Check if player is already marked as "fallen" to avoid multiple triggers
         if (!playerFellThisRound && currentLives > 0)
         {
             playerFellThisRound = true;
@@ -249,46 +238,43 @@ public class GameManager : MonoBehaviour
 
     private void RespawnPlayer()
     {
-        // 1. Set position
+        // 1. Move player to the safe zone
         player.transform.position = playerRespawnPoint.position;
         
-        // 2. UNITY 6 FIX: Reset visuals and kinematic state BEFORE velocity
+        // 2. IMPORTANT: Reset visuals and kinematic state BEFORE physics
         PlayerEffects effects = player.GetComponent<PlayerEffects>();
         if (effects != null) effects.ResetVisuals(); 
         
-        // 3. Reset Momentum now that the body is dynamic again
+        // 3. Reset Physics momentum
         Rigidbody playerRb = player.GetComponent<Rigidbody>();
         if (playerRb != null) playerRb.linearVelocity = Vector3.zero; 
         
-        // 4. Reset internal controller state (fixes Ground Pound lock)
+        // 4. Reset internal movement state
         PlayerController pController = player.GetComponent<PlayerController>();
         if (pController != null) pController.ResetState();
         
-        // 5. Reactivate character
         player.SetActive(true);
     }
 
-    private void UpdateUI() 
-    { 
-        // --- SCORE UPDATE FIX ---
-        // Sends ONLY the number as text, allowing you to use a static "Puntos" label in the UI.
-        if (scoreText != null) 
-        {
-            scoreText.text = currentScore.ToString(); 
-        }
-
-        // Heart lives update
-        for (int i = 0; i < heartIcons.Length; i++) 
-        {
-            if (heartIcons[i] != null) heartIcons[i].SetActive(i < currentLives); 
-        }
+    private void GameOver()
+    {
+        if (bgmSource != null) bgmSource.Stop();
+        player.SetActive(false); 
+        
+        if (UIManager.Instance != null) UIManager.Instance.ShowGameOverPanel();
     }
 
-    private void GameOver() 
-    { 
-        if (bgmSource != null) bgmSource.Stop(); 
-        player.SetActive(false); 
-        if (hudContainer != null) hudContainer.SetActive(false); 
-        if (gameOverPanel != null) gameOverPanel.SetActive(true); 
+    // ==========================================
+    // SCENE NAVIGATION (FOR UI BUTTONS)
+    // ==========================================
+    
+    public void RetryGame()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
+    public void ReturnToMainMenu()
+    {
+        SceneManager.LoadScene("MainMenu");
     }
 }
