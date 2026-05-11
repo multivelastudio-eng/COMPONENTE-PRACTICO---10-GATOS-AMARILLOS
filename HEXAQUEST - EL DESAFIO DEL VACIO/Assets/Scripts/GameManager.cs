@@ -12,19 +12,15 @@ using UnityEngine.SceneManagement; // Essential for scene transitions
 public class GameManager : MonoBehaviour
 {
     // --- 1. GAME SETTINGS ---
-    [Header("Game Settings")]
-    [Tooltip("Time the player has to reach the safe color.")]
-    public float timeToChoose = 3f;
-    [Tooltip("How long the incorrect platforms stay dropped.")]
-    public float timeDropped = 2f;
-    [Tooltip("Total number of attempts before Game Over.")]
+    [Header("Game Settings")][Tooltip("Time the player has to reach the safe color.")]
+    public float timeToChoose = 3f;[Tooltip("How long the incorrect platforms stay dropped.")]
+    public float timeDropped = 2f;[Tooltip("Total number of attempts before Game Over.")]
     public int maxLives = 3;
 
     // --- 2. WORLD REFERENCES ---
     [Header("World References")]
     [Tooltip("List of all hexagonal platforms in the scene.")]
-    public List<HexagonPlatform> allPlatforms;
-    [Tooltip("The position where the player reappears after falling.")]
+    public List<HexagonPlatform> allPlatforms;[Tooltip("The position where the player reappears after falling.")]
     public Transform playerRespawnPoint;
     [Tooltip("The player GameObject.")]
     public GameObject player;
@@ -261,7 +257,8 @@ public class GameManager : MonoBehaviour
         if (bgmSource != null) bgmSource.Stop();
         player.SetActive(false); 
         
-        if (UIManager.Instance != null) UIManager.Instance.ShowGameOverPanel();
+        // BUG FIX: Pasa el currentScore al UIManager para que no salga la "X"
+        if (UIManager.Instance != null) UIManager.Instance.ShowGameOverPanel(currentScore);
     }
 
     // ==========================================
@@ -270,11 +267,24 @@ public class GameManager : MonoBehaviour
     
     public void RetryGame()
     {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        // Toca el sonido de click de la UI
+        if (UIManager.Instance != null) UIManager.Instance.PlayClickSound();
+        
+        // Llama a la corrutina para esperar antes de recargar
+        StartCoroutine(WaitAndLoadScene(SceneManager.GetActiveScene().name));
     }
 
     public void ReturnToMainMenu()
     {
-        SceneManager.LoadScene("MainMenu");
+        if (UIManager.Instance != null) UIManager.Instance.PlayClickSound();
+        
+        StartCoroutine(WaitAndLoadScene("MainMenu"));
+    }
+
+    // BUG FIX: Corrutina que espera 0.3 segundos para que el sonido no se corte
+    private IEnumerator WaitAndLoadScene(string sceneName)
+    {
+        yield return new WaitForSeconds(0.3f);
+        SceneManager.LoadScene(sceneName);
     }
 }

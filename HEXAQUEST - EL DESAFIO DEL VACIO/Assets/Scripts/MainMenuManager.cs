@@ -1,3 +1,4 @@
+using System.Collections; // Required for Coroutines
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -12,23 +13,19 @@ public class MainMenuManager : MonoBehaviour
     [Tooltip("The exact name of the gameplay scene to load.")]
     public string gameplaySceneName = "SampleScene";
 
-    [Header("UI Containers")]
-    [Tooltip("Drag the 'FondoMenu' object here.")]
-    public GameObject mainMenuContainer; 
-    [Tooltip("Drag the 'PanelOpciones' object here.")]
+    [Header("UI Containers")][Tooltip("Drag the 'FondoMenu' object here.")]
+    public GameObject mainMenuContainer;[Tooltip("Drag the 'PanelOpciones' object here.")]
     public GameObject optionsPanel;
 
-    [Header("Audio Feedback")]
-    [Tooltip("AudioSource used for UI sound effects.")]
-    public AudioSource sfxSource;
-    [Tooltip("Sound triggered when hovering over a button.")]
+    [Header("Audio Feedback")][Tooltip("AudioSource used for UI sound effects.")]
+    public AudioSource sfxSource;[Tooltip("Sound triggered when hovering over a button.")]
     public AudioClip hoverSound;
     [Tooltip("Sound triggered when clicking a button.")]
     public AudioClip clickSound;
 
     void Start()
     {
-        // INITIAL STATE: Main Menu active, Options hidden
+        // INITIAL STATE: Show Menu, Hide Options
         if (mainMenuContainer != null) mainMenuContainer.SetActive(true);
         if (optionsPanel != null) optionsPanel.SetActive(false);
     }
@@ -38,17 +35,31 @@ public class MainMenuManager : MonoBehaviour
     // ==========================================
 
     /// <summary>
-    /// Loads the main game scene.
+    /// Loads the main game scene with a slight delay to allow audio to finish.
+    /// Linked to the "JUGAR" button.
     /// </summary>
     public void StartGame()
     {
         PlayClickSound();
         Debug.Log("Loading gameplay...");
-        SceneManager.LoadScene(gameplaySceneName);
+        
+        // BUG FIX: Wait a fraction of a second so the sound finishes before the scene is destroyed
+        StartCoroutine(WaitAndLoadScene(gameplaySceneName));
+    }
+
+    /// <summary>
+    /// Coroutine to handle the delay before loading a new scene.
+    /// </summary>
+    private IEnumerator WaitAndLoadScene(string sceneName)
+    {
+        // Wait for 0.3 seconds to let the click sound play fully
+        yield return new WaitForSeconds(0.3f);
+        SceneManager.LoadScene(sceneName);
     }
 
     /// <summary>
     /// Hides the Main Menu and shows the Options Panel.
+    /// Linked to the "OPCIONES" button.
     /// </summary>
     public void OpenOptions()
     {
@@ -67,6 +78,7 @@ public class MainMenuManager : MonoBehaviour
 
     /// <summary>
     /// Hides the Options Panel and returns to the Main Menu.
+    /// Linked to the "VOLVER" button.
     /// </summary>
     public void CloseOptions()
     {
@@ -80,12 +92,19 @@ public class MainMenuManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Closes the application.
+    /// Closes the application with a slight delay for the audio.
+    /// Linked to the "SALIR" button.
     /// </summary>
     public void QuitGame()
     {
         PlayClickSound();
         Debug.Log("Quitting Application...");
+        StartCoroutine(WaitAndQuit());
+    }
+
+    private IEnumerator WaitAndQuit()
+    {
+        yield return new WaitForSeconds(0.3f);
         Application.Quit();
     }
 
@@ -100,6 +119,7 @@ public class MainMenuManager : MonoBehaviour
     {
         if (sfxSource != null && hoverSound != null)
         {
+            // PlayOneShot allows multiple sounds to overlap without cutting each other
             sfxSource.PlayOneShot(hoverSound);
         }
     }
