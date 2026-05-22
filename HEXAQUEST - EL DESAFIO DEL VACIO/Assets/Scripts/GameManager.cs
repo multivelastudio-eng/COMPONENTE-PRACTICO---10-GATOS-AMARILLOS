@@ -17,6 +17,19 @@ public class GameManager : MonoBehaviour
     public float timeDropped = 2f;[Tooltip("Total number of attempts before Game Over.")]
     public int maxLives = 3;
 
+    // --- DIFFICULTY PROGRESSION (FASE 5) ---
+    [Header("Difficulty Progression (Fase 5)")]
+    [Tooltip("Minimum time the player can have to choose. The timer will never go below this value.")]
+    public float minTimeToChoose = 1.0f;
+    [Tooltip("Each round won reduces 'timeToChoose' by this amount.")]
+    public float timePenaltyPerRound = 0.15f;
+    [Tooltip("Base drop speed of the platforms (assigned to all platforms at start).")]
+    public float basePlatformDropSpeed = 8f;
+    [Tooltip("Each round won increases the platform drop speed by this amount.")]
+    public float dropSpeedIncreasePerRound = 0.5f;
+    [Tooltip("Maximum drop speed the platforms can reach.")]
+    public float maxPlatformDropSpeed = 22f;
+
     // --- 2. WORLD REFERENCES ---
     [Header("World References")]
     [Tooltip("List of all hexagonal platforms in the scene.")]
@@ -153,6 +166,7 @@ public class GameManager : MonoBehaviour
             else
             {
                 currentScore++;
+                IncreaseDifficulty(); // FASE 5: Escalar dificultad al pasar una ronda
                 RefreshUI();
                 if (UIManager.Instance != null) UIManager.Instance.SetInstruction("ROUND PASSED!");
                 
@@ -250,6 +264,36 @@ public class GameManager : MonoBehaviour
         if (pController != null) pController.ResetState();
         
         player.SetActive(true);
+    }
+
+    // ==========================================
+    // DIFFICULTY PROGRESSION SYSTEM (FASE 5)
+    // ==========================================
+
+    /// <summary>
+    /// FASE 5: Incrementa la dificultad del juego progresivamente con cada ronda superada.
+    /// Reduce el tiempo de reaccion del jugador y aumenta la velocidad de caida de plataformas.
+    /// Los cambios se imprimen en consola para evidenciar la progresion.
+    /// </summary>
+    private void IncreaseDifficulty()
+    {
+        // --- 1. Reducir el tiempo de reaccion ---
+        float newTime = timeToChoose - timePenaltyPerRound;
+        timeToChoose = Mathf.Max(newTime, minTimeToChoose);
+
+        // --- 2. Aumentar velocidad de caida de plataformas ---
+        float newDropSpeed = basePlatformDropSpeed + (dropSpeedIncreasePerRound * currentScore);
+        float clampedDropSpeed = Mathf.Min(newDropSpeed, maxPlatformDropSpeed);
+
+        foreach (HexagonPlatform platform in allPlatforms)
+        {
+            platform.dropSpeed = clampedDropSpeed;
+        }
+
+        // --- 3. LOG DE CONSOLA (evidencia para la guia) ---
+        Debug.Log("[HEXAQUEST - Dificultad] === RONDA " + currentScore + " SUPERADA ===");
+        Debug.Log("[HEXAQUEST - Dificultad] Tiempo de reaccion actual: " + timeToChoose.ToString("F2") + "s (minimo: " + minTimeToChoose + "s)");
+        Debug.Log("[HEXAQUEST - Dificultad] Velocidad de caida de plataformas: " + clampedDropSpeed.ToString("F1") + " (maxima: " + maxPlatformDropSpeed + ")");
     }
 
     private void GameOver()

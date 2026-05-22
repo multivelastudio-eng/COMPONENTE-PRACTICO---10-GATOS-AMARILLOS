@@ -2524,6 +2524,7 @@ GameObject:
   - component: {fileID: 1261319063}
   - component: {fileID: 1261319062}
   - component: {fileID: 1261319065}
+  - component: {fileID: 1261319066}
   m_Layer: 5
   m_Name: Btn_Opciones
   m_TagString: Untagged
@@ -2674,6 +2675,20 @@ MonoBehaviour:
             m_StringArgument: 
             m_BoolArgument: 0
           m_CallState: 2
+--- !u!114 &1261319066
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1261319060}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 305db9f211272ed45b3be740bf360927, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIHoverEffect
+  hoverScale: 1.15
+  animationSpeed: 10
 --- !u!1 &1360068136
 GameObject:
   m_ObjectHideFlags: 0
@@ -3014,6 +3029,7 @@ GameObject:
   - component: {fileID: 1514799503}
   - component: {fileID: 1514799502}
   - component: {fileID: 1514799505}
+  - component: {fileID: 1514799506}
   m_Layer: 5
   m_Name: Btn_Jugar
   m_TagString: Untagged
@@ -3164,6 +3180,20 @@ MonoBehaviour:
             m_StringArgument: 
             m_BoolArgument: 0
           m_CallState: 2
+--- !u!114 &1514799506
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1514799500}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 305db9f211272ed45b3be740bf360927, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIHoverEffect
+  hoverScale: 1.15
+  animationSpeed: 10
 --- !u!1 &1554374381
 GameObject:
   m_ObjectHideFlags: 0
@@ -3799,6 +3829,7 @@ GameObject:
   - component: {fileID: 2020958489}
   - component: {fileID: 2020958488}
   - component: {fileID: 2020958491}
+  - component: {fileID: 2020958492}
   m_Layer: 5
   m_Name: Btn_Salir
   m_TagString: Untagged
@@ -3949,6 +3980,20 @@ MonoBehaviour:
             m_StringArgument: 
             m_BoolArgument: 0
           m_CallState: 2
+--- !u!114 &2020958492
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2020958486}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 305db9f211272ed45b3be740bf360927, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIHoverEffect
+  hoverScale: 1.15
+  animationSpeed: 10
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -4559,9 +4559,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3cf9276c03606514ab4f5c99e1b2b5dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  timeToChoose: 3
+  timeToChoose: 3.1
   timeDropped: 2
   maxLives: 3
+  minTimeToChoose: 1
+  timePenaltyPerRound: 0.14
+  basePlatformDropSpeed: 8
+  dropSpeedIncreasePerRound: 0.4
+  maxPlatformDropSpeed: 22
   allPlatforms:
   - {fileID: 1749198142}
   - {fileID: 748845048}
