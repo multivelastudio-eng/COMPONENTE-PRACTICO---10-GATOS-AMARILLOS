@@ -6,6 +6,7 @@ using UnityEngine.UI;
 /// <summary>
 /// Handles all User Interface elements, final score reporting, and audio feedback.
 /// Uses a Singleton pattern to be easily commanded by the GameManager.
+/// Includes an advanced, juicy "Heartbeat & Wobble" animation for New Records.
 /// </summary>
 public class UIManager : MonoBehaviour
 {
@@ -20,19 +21,31 @@ public class UIManager : MonoBehaviour
     public Sprite startSprite;
     private Image introImageDisplay; 
 
-    // --- MAIN HUD ---[Header("Main HUD References")]
+    // --- MAIN HUD ---
+    [Header("Main HUD References")]
     public GameObject hudContainer; 
     public TextMeshProUGUI instructionText; 
     public TextMeshProUGUI scoreText; 
     public GameObject[] heartIcons; 
-    public GameObject gameOverPanel;[Tooltip("Text to display the actual final score instead of X")]
+    public GameObject gameOverPanel; 
+    
+    [Header("Game Over UI (Phase 5 - Victory Condition)")]
+    [Tooltip("Text to display the actual final score instead of X")]
     public TextMeshProUGUI finalScoreText; 
+    [Tooltip("Text to display the all-time High Score")]
+    public TextMeshProUGUI highScoreText; 
+    [Tooltip("UI Element that activates ONLY when a new record is broken")]
+    public GameObject newRecordAlert; 
+
+    [Header("Main HUD Polish")]
     public Image colorIndicator;
 
     // --- POLISH & AUDIO ---
     [Header("Visual Polish & Audio")]
     public Image screenFlashImage;
-    public GameObject textShineOverlay;[Tooltip("AudioSource used exclusively for UI sounds (hovers, clicks, game over)")]
+    public GameObject textShineOverlay;
+    
+    [Tooltip("AudioSource used exclusively for UI sounds (hovers, clicks, game over)")]
     public AudioSource uiAudioSource; 
     public AudioClip hoverSound;
     public AudioClip clickSound;
@@ -126,9 +139,9 @@ public class UIManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Shows the Game Over screen, plays the defeat sound, and sets the final score text.
+    /// Shows the Game Over screen, plays defeat sound, and evaluates Win/Loss condition (Phase 5).
     /// </summary>
-    public void ShowGameOverPanel(int finalScore)
+    public void ShowGameOverPanel(int finalScore, int highScore, bool isNewRecord)
     {
         if (hudContainer != null) hudContainer.SetActive(false);
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
@@ -137,6 +150,26 @@ public class UIManager : MonoBehaviour
         if (finalScoreText != null) 
         {
             finalScoreText.text = "Puntaje Final: " + finalScore.ToString();
+        }
+
+        // Update the High Score text
+        if (highScoreText != null)
+        {
+            highScoreText.text = "Mejor Récord: " + highScore.ToString();
+        }
+
+        // Activate the "New Record!" alert with advanced animation if the player achieved a Victory
+        if (newRecordAlert != null)
+        {
+            if (isNewRecord)
+            {
+                newRecordAlert.SetActive(true);
+                StartCoroutine(AnimateNewRecordPop()); // Start the juicy animation
+            }
+            else
+            {
+                newRecordAlert.SetActive(false);
+            }
         }
 
         // Play Game Over Sound
@@ -169,6 +202,55 @@ public class UIManager : MonoBehaviour
     // ==========================================
     // VISUAL POLISH COROUTINES
     // ==========================================
+
+    /// <summary>
+    /// Creates a delayed bouncy pop-in, wobble, and heartbeat effect for the New Record text.
+    /// </summary>
+    private IEnumerator AnimateNewRecordPop()
+    {
+        // 0. Keep it completely invisible and rotated initially
+        newRecordAlert.transform.localScale = Vector3.zero;
+        newRecordAlert.transform.localRotation = Quaternion.Euler(0, 0, 15f); // Start slightly tilted
+
+        // 1. THE ANTICIPATION DELAY: Let the player read the "Game Over" and score first
+        yield return new WaitForSeconds(0.6f);
+
+        // 2. EXPLOSIVE POP & WOBBLE: Pop up from zero to 120% while rotating
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime * 5f; // Speed of the pop
+            
+            // Wobble calculation
+            float wobble = Mathf.Lerp(15f, -5f, t);
+            newRecordAlert.transform.localRotation = Quaternion.Euler(0, 0, wobble);
+            
+            // Scale calculation
+            newRecordAlert.transform.localScale = Vector3.Lerp(Vector3.zero, Vector3.one * 1.2f, t);
+            yield return null;
+        }
+
+        // 3. SETTLING: Smoothly return to 100% scale and straight rotation (0 degrees)
+        t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime * 6f;
+            newRecordAlert.transform.localRotation = Quaternion.Lerp(Quaternion.Euler(0, 0, -5f), Quaternion.identity, t);
+            newRecordAlert.transform.localScale = Vector3.Lerp(Vector3.one * 1.2f, Vector3.one, t);
+            yield return null;
+        }
+
+        // Ensure perfect alignment at the end of the settling phase
+        newRecordAlert.transform.localRotation = Quaternion.identity;
+
+        // 4. INFINITE HEARTBEAT: Pulse slowly to keep drawing attention
+        while (true)
+        {
+            float pulse = 1f + Mathf.PingPong(Time.time * 0.5f, 0.1f);
+            newRecordAlert.transform.localScale = Vector3.one * pulse;
+            yield return null;
+        }
+    }
 
     private void ExecuteTextImpact(bool isMega) 
     { 

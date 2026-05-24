@@ -12,13 +12,16 @@ using UnityEngine.SceneManagement; // Essential for scene transitions
 public class GameManager : MonoBehaviour
 {
     // --- 1. GAME SETTINGS ---
-    [Header("Game Settings")][Tooltip("Time the player has to reach the safe color.")]
-    public float timeToChoose = 3f;[Tooltip("How long the incorrect platforms stay dropped.")]
-    public float timeDropped = 2f;[Tooltip("Total number of attempts before Game Over.")]
+    [Header("Game Settings")]
+    [Tooltip("Time the player has to reach the safe color.")]
+    public float timeToChoose = 3f;
+    [Tooltip("How long the incorrect platforms stay dropped.")]
+    public float timeDropped = 2f;
+    [Tooltip("Total number of attempts before Game Over.")]
     public int maxLives = 3;
 
-    // --- DIFFICULTY PROGRESSION (FASE 5) ---
-    [Header("Difficulty Progression (Fase 5)")]
+    // --- DIFFICULTY PROGRESSION (PHASE 5) ---
+    [Header("Difficulty Progression (Phase 5)")]
     [Tooltip("Minimum time the player can have to choose. The timer will never go below this value.")]
     public float minTimeToChoose = 1.0f;
     [Tooltip("Each round won reduces 'timeToChoose' by this amount.")]
@@ -33,7 +36,8 @@ public class GameManager : MonoBehaviour
     // --- 2. WORLD REFERENCES ---
     [Header("World References")]
     [Tooltip("List of all hexagonal platforms in the scene.")]
-    public List<HexagonPlatform> allPlatforms;[Tooltip("The position where the player reappears after falling.")]
+    public List<HexagonPlatform> allPlatforms;
+    [Tooltip("The position where the player reappears after falling.")]
     public Transform playerRespawnPoint;
     [Tooltip("The player GameObject.")]
     public GameObject player;
@@ -166,7 +170,7 @@ public class GameManager : MonoBehaviour
             else
             {
                 currentScore++;
-                IncreaseDifficulty(); // FASE 5: Escalar dificultad al pasar una ronda
+                IncreaseDifficulty(); // PHASE 5: Scale difficulty on round pass
                 RefreshUI();
                 if (UIManager.Instance != null) UIManager.Instance.SetInstruction("ROUND PASSED!");
                 
@@ -267,21 +271,20 @@ public class GameManager : MonoBehaviour
     }
 
     // ==========================================
-    // DIFFICULTY PROGRESSION SYSTEM (FASE 5)
+    // DIFFICULTY PROGRESSION SYSTEM (PHASE 5)
     // ==========================================
 
     /// <summary>
-    /// FASE 5: Incrementa la dificultad del juego progresivamente con cada ronda superada.
-    /// Reduce el tiempo de reaccion del jugador y aumenta la velocidad de caida de plataformas.
-    /// Los cambios se imprimen en consola para evidenciar la progresion.
+    /// PHASE 5: Progressively increases game difficulty with each survived round.
+    /// Reduces player reaction time and increases platform drop speed.
     /// </summary>
     private void IncreaseDifficulty()
     {
-        // --- 1. Reducir el tiempo de reaccion ---
+        // --- 1. Reduce reaction time ---
         float newTime = timeToChoose - timePenaltyPerRound;
         timeToChoose = Mathf.Max(newTime, minTimeToChoose);
 
-        // --- 2. Aumentar velocidad de caida de plataformas ---
+        // --- 2. Increase platform drop speed ---
         float newDropSpeed = basePlatformDropSpeed + (dropSpeedIncreasePerRound * currentScore);
         float clampedDropSpeed = Mathf.Min(newDropSpeed, maxPlatformDropSpeed);
 
@@ -290,19 +293,46 @@ public class GameManager : MonoBehaviour
             platform.dropSpeed = clampedDropSpeed;
         }
 
-        // --- 3. LOG DE CONSOLA (evidencia para la guia) ---
-        Debug.Log("[HEXAQUEST - Dificultad] === RONDA " + currentScore + " SUPERADA ===");
-        Debug.Log("[HEXAQUEST - Dificultad] Tiempo de reaccion actual: " + timeToChoose.ToString("F2") + "s (minimo: " + minTimeToChoose + "s)");
-        Debug.Log("[HEXAQUEST - Dificultad] Velocidad de caida de plataformas: " + clampedDropSpeed.ToString("F1") + " (maxima: " + maxPlatformDropSpeed + ")");
+        // --- 3. CONSOLE LOG (Evidence for rubric) ---
+        Debug.Log("[HEXAQUEST - Difficulty] === ROUND " + currentScore + " PASSED ===");
+        Debug.Log("[HEXAQUEST - Difficulty] Current reaction time: " + timeToChoose.ToString("F2") + "s (min: " + minTimeToChoose + "s)");
+        Debug.Log("[HEXAQUEST - Difficulty] Platform drop speed: " + clampedDropSpeed.ToString("F1") + " (max: " + maxPlatformDropSpeed + ")");
     }
+
+    // ==========================================
+    // GAME OVER & VICTORY CONDITION (PHASE 5)
+    // ==========================================
 
     private void GameOver()
     {
         if (bgmSource != null) bgmSource.Stop();
         player.SetActive(false); 
         
-        // BUG FIX: Pasa el currentScore al UIManager para que no salga la "X"
-        if (UIManager.Instance != null) UIManager.Instance.ShowGameOverPanel(currentScore);
+        // --- HIGH SCORE LOGIC (PHASE 5: VICTORY CONDITION) ---
+        // Read the previously saved high score
+        int highScore = PlayerPrefs.GetInt("Hexaquest_HighScore", 0);
+        bool isNewRecord = false;
+
+        // If we beat the record, it's a "Victory"!
+        if (currentScore > highScore)
+        {
+            highScore = currentScore;
+            PlayerPrefs.SetInt("Hexaquest_HighScore", highScore); // Save new record
+            PlayerPrefs.Save();
+            
+            // Only trigger "New Record" if the player has played before and scored > 0
+            if (PlayerPrefs.HasKey("Hexaquest_HighScore") && currentScore > 0)
+            {
+                isNewRecord = true;
+                Debug.Log("[HEXAQUEST - Victory] New High Score Achieved: " + highScore);
+            }
+        }
+        
+        // Pass the actual score, high score, and victory status to the UIManager
+        if (UIManager.Instance != null) 
+        {
+            UIManager.Instance.ShowGameOverPanel(currentScore, highScore, isNewRecord);
+        }
     }
 
     // ==========================================
@@ -311,21 +341,16 @@ public class GameManager : MonoBehaviour
     
     public void RetryGame()
     {
-        // Toca el sonido de click de la UI
         if (UIManager.Instance != null) UIManager.Instance.PlayClickSound();
-        
-        // Llama a la corrutina para esperar antes de recargar
         StartCoroutine(WaitAndLoadScene(SceneManager.GetActiveScene().name));
     }
 
     public void ReturnToMainMenu()
     {
         if (UIManager.Instance != null) UIManager.Instance.PlayClickSound();
-        
         StartCoroutine(WaitAndLoadScene("MainMenu"));
     }
 
-    // BUG FIX: Corrutina que espera 0.3 segundos para que el sonido no se corte
     private IEnumerator WaitAndLoadScene(string sceneName)
     {
         yield return new WaitForSeconds(0.3f);
