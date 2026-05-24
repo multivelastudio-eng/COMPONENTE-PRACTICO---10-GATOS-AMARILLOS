@@ -5,26 +5,40 @@ using UnityEngine.Events;
 /// <summary>
 /// Handles player movement, jumping, and ground pounding mechanics.
 /// Includes advanced physics checks to prevent double-jumping, mid-air glitches,
-/// and micro-landing audio bugs on collider seams.
-/// </summary>[RequireComponent(typeof(Rigidbody))]
+/// and micro-landing audio/animation bugs on collider seams.
+/// Optimized for Unity 6.
+/// </summary>
+[RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour
 {
     // --- 1. MOVEMENT SETTINGS ---
-    [Header("Movement & Camera")][Tooltip("Normal movement speed.")]
-    public float moveSpeed = 8f;[Tooltip("Multiplier applied when Left Shift is held.")]
-    public float sprintMultiplier = 1.5f;[Tooltip("How fast the character rotates to face the movement direction.")]
-    public float rotationSpeed = 15f;[Tooltip("Reference to the Main Camera to make movement relative to screen view.")]
+    [Header("Movement & Camera")]
+    [Tooltip("Normal movement speed.")]
+    public float moveSpeed = 8f;
+    [Tooltip("Multiplier applied when Left Shift is held.")]
+    public float sprintMultiplier = 1.5f;
+    [Tooltip("How fast the character rotates to face the movement direction.")]
+    public float rotationSpeed = 15f;
+    [Tooltip("Reference to the Main Camera to make movement relative to screen view.")]
     public Transform mainCamera;
 
-    // --- 2. JUMP & ACTION PHYSICS ---[Header("Jump & Action Physics")][Tooltip("Exact vertical velocity applied when jumping.")]
-    public float jumpForce = 8.5f;[Tooltip("Downward force applied during a Ground Pound.")]
-    public float groundPoundForce = 30f;[Tooltip("Seconds the character hangs in the air before pounding down.")]
+    // --- 2. JUMP & ACTION PHYSICS ---
+    [Header("Jump & Action Physics")]
+    [Tooltip("Exact vertical velocity applied when jumping.")]
+    public float jumpForce = 8.5f;
+    [Tooltip("Downward force applied during a Ground Pound.")]
+    public float groundPoundForce = 30f;
+    [Tooltip("Seconds the character hangs in the air before pounding down.")]
     public float hangTime = 0.2f;
     
-    [Header("Game Feel (Mario-like Physics)")][Tooltip("Gravity multiplier when falling to make it feel heavy/fast.")]
-    public float fallMultiplier = 2.5f;[Tooltip("Gravity multiplier when releasing the jump button early (Low Jump).")]
-    public float lowJumpMultiplier = 2f;[Tooltip("Time in seconds the player can still jump after walking off a ledge.")]
-    public float coyoteTime = 0.15f;[Tooltip("Time in seconds the game remembers a jump press before hitting the ground.")]
+    [Header("Game Feel (Mario-like Physics)")]
+    [Tooltip("Gravity multiplier when falling to make it feel heavy/fast.")]
+    public float fallMultiplier = 2.5f;
+    [Tooltip("Gravity multiplier when releasing the jump button early (Low Jump).")]
+    public float lowJumpMultiplier = 2f;
+    [Tooltip("Time in seconds the player can still jump after walking off a ledge.")]
+    public float coyoteTime = 0.15f;
+    [Tooltip("Time in seconds the game remembers a jump press before hitting the ground.")]
     public float jumpBufferTime = 0.15f;
 
     // --- 3. GROUND DETECTION ---
@@ -188,7 +202,7 @@ public class PlayerController : MonoBehaviour
         coyoteTimeCounter = 0f;
         jumpCooldownTimer = 0.2f;
         
-        // Force the air timer so the landing sound is guaranteed to play when landing from a real jump
+        // BUG FIX 1: Force the air timer so the jump animation triggers instantly!
         airTimer = 0.2f; 
 
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, jumpForce, rb.linearVelocity.z);
@@ -212,7 +226,15 @@ public class PlayerController : MonoBehaviour
         if (characterAnimator != null)
         {
             characterAnimator.SetFloat("Speed", movementInput.magnitude);
-            characterAnimator.SetBool("isGrounded", isGrounded);
+
+            // ==========================================
+            // BUG FIX 2: ANIMATION FLICKER/STUTTER RESOLUTION
+            // We only tell the animator we are airborne if we have been airborne for more than 0.1 seconds,
+            // OR if we explicitly triggered a jump/ground pound.
+            // This filters out the 1-frame gaps when walking over hexagon seams.
+            // ==========================================
+            bool animatorGrounded = isGrounded || (airTimer < 0.1f);
+            characterAnimator.SetBool("isGrounded", animatorGrounded);
         }
     }
 
